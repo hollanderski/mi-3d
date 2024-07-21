@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js and EEG Data</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/controls/OrbitControls.js"></script>
+    <script src="/static/js/magic-sphere.js"></script>
+    <div id="Bloch Sphere"></div>
+    <script>
+        console.log("Hello world! This is a BCI experiment");
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = new WebSocket('ws://' + window.location.host + '/ws');
+            init_bloch_sphere();
+
+            socket.onopen = function(event) {
+                console.log('WebSocket connection opened');
+                // Optional: Send an initial condition or setup message if needed
+            };
+
+            socket.onerror = function(error) {
+                console.error('WebSocket error: ', error);
+            };
+
+            socket.onclose = function(event) {
+                console.log('WebSocket connection closed', event);
+            };
+
+            socket.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+                const data = msg.data;
+
+                console.log("Message received:", msg);
+
+                // Calculate the horizontal rotation increment based on incoming data
+                const horizontalRotationIncrement = msg["mindfulness"] * 0.1;
+
+                // Calculate the new azimuthal angle
+                const currentAzimuthalAngle = controls.getAzimuthalAngle();
+                const newAzimuthalAngle = currentAzimuthalAngle + horizontalRotationIncrement;
+
+                // Calculate the new camera position based on the azimuthal angle
+                const radius = camera.position.distanceTo(controls.target);
+                camera.position.x = radius * Math.sin(newAzimuthalAngle);
+                camera.position.z = radius * Math.cos(newAzimuthalAngle);
+
+                // Update the controls
+                controls.update();
+            };
+
+            // Function to send the condition to the server
+            function sendCondition(condition) {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ condition }));
+                } else {
+                    console.error('WebSocket is not open. Cannot send condition.');
+                    // Optional: Retry logic or handle disconnection
+                }
+            }
+
+            // Function to shuffle an array (Fisher-Yates Shuffle)
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            // Minimal motor imagery experiment
+            const classes = ["left", "right"];
+            const trialsPerClass = 30;
+            const classDuration = 2000; // Duration in milliseconds per class presentation (2 seconds)
+
+            let trialIndex = 0;
+            let classOrder = [];
+
+            function startExperiment() {
+                classOrder = Array(trialsPerClass).fill("left").concat(Array(trialsPerClass).fill("right"));
+                shuffle(classOrder); // Randomize the order of the classes
+
+                presentClass();
+            }
+
+            function presentClass() {
+                if (trialIndex < classOrder.length) {
+                    const currentClass = classOrder[trialIndex];
+                    console.log(`Presenting class: ${currentClass}`);
+
+                    // Send the current class condition to the server
+                    sendCondition(currentClass);
+
+                    // Move the sphere left or right
+                    const targetX = currentClass === "left" ? -3 : 3;
+                    const duration = 1000; // Movement duration in milliseconds
+
+                    // Animate the sphere movement
+                    const startTime = performance.now();
+                    const initialX = sphere.position.x;
+
+                    function animateMovement(timestamp) {
+                        const elapsed = timestamp - startTime;
+                        const progress = Math.min(elapsed / duration, 1);
+                        sphere.position.x = initialX + (targetX - initialX) * progress;
+
+                        if (progress < 1) {
+                            requestAnimationFrame(animateMovement);
+                        } else {
+                            // Move back to center
+                            const backStartTime = performance.now();
+
+                            function animateBackToCenter(backTimestamp) {
+                                const backElapsed = backTimestamp - backStartTime;
+                                const backProgress = Math.min(backElapsed / duration, 1);
+                                sphere.position.x = targetX - (targetX - 0) * backProgress;
+
+                                if (backProgress < 1) {
+                                    requestAnimationFrame(animateBackToCenter);
+                                } else {
+                                    setTimeout(() => {
+                                        trialIndex++;
+                                        presentClass();
+                                    }, 500); // Short pause before the next trial
+                                }
+                            }
+
+                            requestAnimationFrame(animateBackToCenter);
+                        }
+                    }
+
+                    requestAnimationFrame(animateMovement);
+                } else {
+                    console.log("Experiment completed.");
+                }
+            }
+
+            startExperiment();
+        });
+    </script>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+</body>
+</html>
