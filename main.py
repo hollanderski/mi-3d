@@ -13,6 +13,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from mi_inference import inference
+
 
 # Sampling frequency = Window Size i.e each recording == 1s of data
 # Number of samples to use for band power calculation
@@ -84,9 +86,20 @@ async def eeg_stream(websocket: WebSocket):
                 restfulness.release()
 
                 # MNE- integration
-                '''
+                
                 eeg_channels = BoardShim.get_eeg_channels(BoardIds.CYTON_DAISY_BOARD.value)
                 eeg_data = data[eeg_channels, :]
+               
+                #mydata = eeg_data[:3]
+                # C3, Cz, C4
+                mydata = eeg_data[[3, 1, 4]]
+
+                mydata = mydata.reshape((1, 3, 125))
+
+                # Motor imagery prediction
+                mi = inference(mydata)
+
+                '''
                 eeg_data = eeg_data / 1000000  # BrainFlow returns uV, convert to V for MNE
 
                 # Creating MNE objects from brainflow data arrays
@@ -108,12 +121,19 @@ async def eeg_stream(websocket: WebSocket):
  
 
                 # Send data to WebSocket
+
+                # TODO send mindfulness as string
+
+                #await websocket.send(str(mind_pred))
                 
+               
                 await websocket.send_json({
-                    'data': feature_vector.tolist(),
+                    #'data': feature_vector.tolist(),
                     'mindfulness': mind_pred,
-                    'restfulness': rest_pred
+                    'restfulness': rest_pred, 
+                    #'pred' : inference()
                 }) 
+            
 
                 
 
