@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js and EEG Data</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/controls/OrbitControls.js"></script>
+    <script src="/static/js/magic-sphere.js"></script>
+    <style>
+        #condition {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            background-color: black;
+            z-index: 10;
+            display: none;
+            font-family: Helvetica;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="Bloch Sphere" style="margin-top: -10%;">
+        <canvas id="canvas"></canvas>
+        <div id="condition"></div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = new WebSocket('ws://' + window.location.host + '/ws');
+            init_bloch_sphere();
+
+            socket.onopen = function(event) {
+                console.log('WebSocket connection opened');
+            };
+
+            socket.onerror = function(error) {
+                console.error('WebSocket error: ', error);
+            };
+
+            socket.onclose = function(event) {
+                console.log('WebSocket connection closed', event);
+            };
+
+            socket.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+                console.log("Message received:", msg);
+
+                if (msg.condition) {
+                    showCondition(msg.condition);
+                }
+            };
+
+            function showCondition(condition) {
+                const conditionDiv = document.getElementById('condition');
+                conditionDiv.textContent = condition;
+                conditionDiv.style.display = 'flex';
+
+                setTimeout(() => {
+                    conditionDiv.style.display = 'none';
+                    moveSphere(condition);
+                }, 1000); // Show the condition for 2 seconds
+            }
+
+            function moveSphere(condition) {
+                const targetX = condition === "left" ? -3 : 3;
+                const duration = 1000; // Movement duration in milliseconds
+
+                sphere.position.x = 0; // Ensure the ball starts from the center
+
+                const startTime = performance.now();
+                const initialX = sphere.position.x;
+
+                function animateMovement(timestamp) {
+                    const elapsed = timestamp - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    sphere.position.x = initialX + (targetX - initialX) * progress;
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animateMovement);
+                    }
+                }
+
+                requestAnimationFrame(animateMovement);
+            }
+        });
+    </script>
+</body>
+</html>
